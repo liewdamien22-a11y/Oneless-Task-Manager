@@ -33,14 +33,19 @@ Python 3.14 will not work until Kivy releases updated binaries for it.
 ## Step 2 — Open the project in VS Code
 
 1. Open VS Code
-2. Open the terminal inside VS Code:
+2. Open the **`oneless`** subfolder (not the repository root):
+   - Menu → **File → Open Folder…** and select the `oneless` folder inside the repo
+3. Open the terminal inside VS Code:
    - Menu → **Terminal → New Terminal**, or press **Ctrl + `** (backtick)
-3. The terminal opens automatically inside the project folder.
-   Confirm with:
+4. Confirm your terminal is in the right place:
    ```powershell
    Get-Location
    ```
-   It should show the path ending in `oneless`.
+   It should show a path ending in `oneless` (e.g. `…\Oneless Task Manager\oneless`).
+
+> **Already opened the repo root by mistake?**
+> That's fine — just `cd oneless` in the terminal before continuing, or use the
+> full paths shown in the note below Step 4.
 
 ---
 
@@ -66,11 +71,18 @@ venv\Scripts\activate
 **How to tell it worked:** your terminal prompt changes to show `(venv)` at the start:
 
 ```
-(venv) PS C:\Users\Damien\Desktop\AI HACKATHON\oneless>
+(venv) PS C:\...\Oneless Task Manager\oneless>
 ```
 
 If you ever open a new terminal window, you'll need to run this activate
 command again before running the app.
+
+> **If your terminal is in the repo root** (`Oneless Task Manager`) instead of
+> the `oneless` subfolder, use the longer path:
+> ```powershell
+> .\oneless\venv\Scripts\activate
+> cd oneless
+> ```
 
 ---
 
@@ -144,6 +156,13 @@ venv\Scripts\activate
 python main.py
 ```
 
+> **If your terminal starts in the repo root** (`Oneless Task Manager`):
+> ```powershell
+> .\oneless\venv\Scripts\activate
+> cd oneless
+> python main.py
+> ```
+
 ---
 
 ## Running the tests
@@ -170,8 +189,9 @@ OK
 | `py --list` doesn't show 3.13 | Reinstall Python 3.13 with "Add to PATH" checked |
 | `python` opens the Microsoft Store | Reinstall Python 3.13 with "Add to PATH" checked |
 | `kivy_deps.sdl2_dev` error during install | You're using Python 3.14 — go back to Step 1 |
-| `ModuleNotFoundError: No module named 'kivy'` | Virtual environment isn't active — run `venv\Scripts\activate` |
+| `ModuleNotFoundError: No module named 'kivy'` | Virtual environment isn't active — run `venv\Scripts\activate` (or `.\oneless\venv\Scripts\activate` from the repo root) |
 | `(venv)` disappeared from prompt | Open a new terminal and run `venv\Scripts\activate` again |
+| `venv\Scripts\activate` says "module could not be loaded" | Your terminal is in the repo root, not the `oneless` folder — run `.\oneless\venv\Scripts\activate` then `cd oneless` |
 | App window is black or crashes immediately | Update your graphics drivers; Kivy requires OpenGL 2.0+ |
 | Tasks not saving between restarts | Check that the `data/` folder exists and you have write access to the project folder |
 | VS Code asks "select interpreter for workspace" | Click **Yes** and choose the `venv` Python — this is the right one |

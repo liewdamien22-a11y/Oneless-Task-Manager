@@ -15,18 +15,26 @@ AI-assisted personal task manager built with Python and Kivy.
 
 ## Setup
 
-```bash
-# 1. Create and activate a virtual environment (recommended)
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS / Linux
-source venv/bin/activate
+> **Important:** all commands below must be run from inside the **`oneless`**
+> subfolder (the one that contains `main.py`), not the repository root.
+> If your terminal starts in the repo root, run `cd oneless` first.
 
-# 2. Install dependencies
+```powershell
+# 1. Create a virtual environment
+py -3.13 -m venv venv
+
+# 2. Activate it
+# Windows (from inside the oneless folder)
+venv\Scripts\activate
+# Windows (from the repo root — Oneless Task Manager)
+# .\oneless\venv\Scripts\activate  &&  cd oneless
+# macOS / Linux
+# source venv/bin/activate
+
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# 3. (Optional) Configure AI provider
+# 4. (Optional) Configure AI provider
 #    Copy .env.example to .env and edit as needed.
 #    The default mock provider works without any credentials.
 copy .env.example .env   # Windows
@@ -35,7 +43,8 @@ copy .env.example .env   # Windows
 
 ## Running the application
 
-```bash
+```powershell
+# Ensure the venv is active and your terminal is in the oneless folder, then:
 python main.py
 ```
 
