@@ -65,6 +65,7 @@ class MainScreen(BoxLayout):
         self._chat_history: List[ChatMessage] = []
 
         self._build_columns()
+        self._restore_pomodoro_settings()
         self._refresh_all()
 
         # Show provider init error in sidebar if one occurred
@@ -117,6 +118,8 @@ class MainScreen(BoxLayout):
         # ── Right column ───────────────────────────────────────────────
         self._ai_sidebar = AISidebarWidget(
             on_send=self._on_ai_send,
+            on_overwhelmed=self._on_overwhelmed,
+            on_pomodoro_settings_changed=self._on_pomodoro_settings_changed,
             size_hint_x=0.33,
         )
 
@@ -193,11 +196,13 @@ class MainScreen(BoxLayout):
         task = self._service.get_task(task_id)
         if task:
             self._task_detail.show_task(task)
+            self._ai_sidebar.set_selected_task(task.title)
         self._refresh_list()
 
     def _on_new_task(self) -> None:
         self._selected_task_id = None
         self._task_detail.enter_create_mode()
+        self._ai_sidebar.set_selected_task(None)
         self._refresh_list()
 
     def _on_filter_changed(self, filter_name: str) -> None:
@@ -407,6 +412,78 @@ class MainScreen(BoxLayout):
             return f"Could not execute {tc.name}: {exc}"
         except Exception as exc:
             return f"Error in {tc.name}: {exc}"
+
+    # ------------------------------------------------------------------
+    # Overwhelmed handler
+    # ------------------------------------------------------------------
+
+    def _on_overwhelmed(self) -> None:
+        """Called when the user presses 'I'm Feeling Overwhelmed'."""
+        self._ai_sidebar.add_user_message("I'm feeling overwhelmed 😰")
+        if self._ai_provider is None:
+            self._ai_sidebar.add_assistant_message(
+                "⚠️ AI provider is not configured. Check your .env file.\n\n"
+                "In the meantime: pick your single highest-priority task and "
+                "spend just 10 minutes on it."
+            )
+            return
+
+        self._ai_sidebar.set_loading(True)
+        import threading
+        threading.Thread(
+            target=self._overwhelmed_worker,
+            daemon=True,
+        ).start()
+
+    def _overwhelmed_worker(self) -> None:
+        """Background thread for the overwhelmed AI call."""
+        try:
+            task_context = self._build_task_context()
+            response = self._ai_provider.chat_overwhelmed(
+                history=self._chat_history,
+                task_context=task_context,
+            )
+        except Exception as exc:
+            Clock.schedule_once(
+                lambda dt, e=str(exc): self._ai_on_error(e), 0
+            )
+            return
+        Clock.schedule_once(
+            lambda dt, r=response: self._overwhelmed_on_response(r), 0
+        )
+
+    def _overwhelmed_on_response(self, response) -> None:
+        """Main thread: show the overwhelmed response (no tool calls)."""
+        self._chat_history.append(ChatMessage(
+            role="user",
+            content="I'm feeling overwhelmed. Can you help me figure out what to focus on?",
+        ))
+        self._chat_history.append(ChatMessage(role="assistant", content=response.text))
+        if response.text:
+            self._ai_sidebar.add_assistant_message(response.text)
+        self._ai_sidebar.set_loading(False)
+
+    # ------------------------------------------------------------------
+    # Pomodoro settings persistence
+    # ------------------------------------------------------------------
+
+    def _on_pomodoro_settings_changed(self, settings: dict) -> None:
+        """Persist Pomodoro timer settings to the database."""
+        import json
+        repo = self._service._repo
+        repo.set_setting("pomodoro_settings", json.dumps(settings))
+
+    def _restore_pomodoro_settings(self) -> None:
+        """Load persisted Pomodoro settings and apply them on startup."""
+        import json
+        repo = self._service._repo
+        raw = repo.get_setting("pomodoro_settings")
+        if raw:
+            try:
+                settings = json.loads(raw)
+                self._ai_sidebar.apply_pomodoro_settings(settings)
+            except (json.JSONDecodeError, Exception):
+                pass  # corrupt data — use defaults
 
     # ------------------------------------------------------------------
     # Error popup

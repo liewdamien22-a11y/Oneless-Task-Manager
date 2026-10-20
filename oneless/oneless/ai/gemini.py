@@ -126,7 +126,7 @@ _TOOLS = [
 ]
 
 # ---------------------------------------------------------------------------
-# System prompt
+# System prompts
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT = """You are OneLess, a helpful personal task management assistant.
@@ -140,6 +140,29 @@ Guidelines:
 - If the user's request is ambiguous (e.g. "delete that task" with no prior context), ask which task they mean.
 - Keep replies concise and friendly.
 - Today's date is available in the task context header.
+"""
+
+_OVERWHELMED_PROMPT = """The user has indicated they are feeling overwhelmed.
+
+Your role is to provide calm, practical, non-judgemental support.
+
+Instructions:
+- Acknowledge their situation briefly and warmly — do not be dismissive.
+- Review the task list in the context and identify the single most important
+  next action (consider due dates, priorities, and overdue status).
+- Recommend one specific, manageable next step. Keep it small and achievable.
+- If a large task is the most pressing, optionally suggest 2-3 concrete subtasks
+  to break it down — but only if it genuinely helps. Propose them as suggestions;
+  do NOT automatically create them.
+- If the schedule looks overloaded (many overdue or high-priority tasks), gently
+  suggest which tasks might be rescheduled or deprioritised and briefly explain why.
+  Do NOT automatically reschedule or delete anything without user approval.
+- If there are very few or no tasks, acknowledge that and offer a general
+  productivity tip or ask a clarifying question.
+- Do not fabricate deadlines, durations, or commitments not present in the data.
+- Do not diagnose mental health conditions or present this as therapy.
+- End with a clear, actionable next step the user can take right now.
+- Keep the total response under 200 words.
 """
 
 # ---------------------------------------------------------------------------
@@ -234,3 +257,56 @@ class GeminiProvider(AIProvider):
                     tool_calls.append(ToolCall(name=fc.name, args=args))
 
         return AIResponse(text=reply_text.strip(), tool_calls=tool_calls)
+
+    def chat_overwhelmed(
+        self,
+        history: List[ChatMessage],
+        task_context: str,
+    ) -> AIResponse:
+        """
+        Special call for the 'I'm Feeling Overwhelmed' workflow.
+
+        Uses a dedicated system prompt focused on supportive, practical
+        guidance.  Tool calling is intentionally disabled — no automatic
+        mutations happen; any suggested changes require user approval.
+        """
+        types = self._types
+
+        system_instruction = (
+            _OVERWHELMED_PROMPT
+            + "\n\n--- Current Task Context ---\n"
+            + (task_context or "No tasks yet.")
+        )
+
+        contents = []
+        for msg in history:
+            role = "user" if msg.role == "user" else "model"
+            contents.append(
+                types.Content(role=role, parts=[types.Part(text=msg.content)])
+            )
+        # Inject a fixed user trigger so the model knows what to respond to
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part(text="I'm feeling overwhelmed. Can you help me figure out what to focus on?")],
+            )
+        )
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            # No tools — overwhelmed mode never mutates tasks automatically
+        )
+
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=contents,
+            config=config,
+        )
+
+        reply_text = ""
+        for candidate in response.candidates:
+            for part in candidate.content.parts:
+                if hasattr(part, "text") and part.text:
+                    reply_text += part.text
+
+        return AIResponse(text=reply_text.strip())

@@ -53,6 +53,13 @@ _CREATE_IDX_TASKS_DUE = """
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks (due_date);
 """
 
+_CREATE_SETTINGS = """
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -94,6 +101,7 @@ class TaskRepository:
             + _CREATE_SUBTASKS
             + _CREATE_IDX_SUBTASKS
             + _CREATE_IDX_TASKS_DUE
+            + _CREATE_SETTINGS
         )
         conn.commit()
 
@@ -268,3 +276,25 @@ class TaskRepository:
             (prefix + "%",),
         ).fetchall()
         return {r["due_date"] for r in rows}
+
+    # ------------------------------------------------------------------
+    # Settings key-value store
+    # ------------------------------------------------------------------
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Return the stored value for key, or default if not found."""
+        conn = self._connect()
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Upsert a key-value pair in the settings table."""
+        conn = self._connect()
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+        conn.commit()

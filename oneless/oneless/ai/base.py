@@ -70,3 +70,18 @@ class AIProvider(ABC):
         task_context  — a plain-text summary of current tasks injected as
                         system context so the model knows what tasks exist
         """
+
+    def chat_overwhelmed(
+        self,
+        history: List[ChatMessage],
+        task_context: str,
+    ) -> AIResponse:
+        """
+        Overwhelmed-mode call.  Default implementation falls back to a
+        plain chat message so providers that don't override it still work.
+        """
+        return self.chat(
+            history=history,
+            user_message="I'm feeling overwhelmed. Can you help me figure out what to focus on?",
+            task_context=task_context,
+        )

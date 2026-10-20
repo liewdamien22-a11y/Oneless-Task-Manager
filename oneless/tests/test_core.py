@@ -174,5 +174,163 @@ class TestTaskService(unittest.TestCase):
             self._svc.delete_task("nonexistent-id")
 
 
+# ---------------------------------------------------------------------------
+# Pomodoro timer logic tests (no Kivy required)
+# ---------------------------------------------------------------------------
+
+class TestPomodoroTimer(unittest.TestCase):
+    """Tests for PomodoroTimer — pure logic, no Kivy."""
+
+    def _make_timer(self, **settings_overrides):
+        from oneless.ui.pomodoro_widget import PomodoroTimer, DEFAULT_SETTINGS
+        settings = dict(DEFAULT_SETTINGS)
+        settings.update(settings_overrides)
+        return PomodoroTimer(settings=settings)
+
+    def test_default_state(self):
+        from oneless.ui.pomodoro_widget import DEFAULT_SETTINGS
+        t = self._make_timer()
+        self.assertEqual(t.session_type, "focus")
+        self.assertAlmostEqual(t.remaining, DEFAULT_SETTINGS["focus_minutes"] * 60, delta=1)
+        self.assertFalse(t.running)
+        self.assertEqual(t.completed_focus_sessions, 0)
+
+    def test_start_and_pause(self):
+        t = self._make_timer()
+        t.start()
+        self.assertTrue(t.running)
+        t.pause()
+        self.assertFalse(t.running)
+
+    def test_reset_restores_full_duration(self):
+        from oneless.ui.pomodoro_widget import DEFAULT_SETTINGS
+        t = self._make_timer()
+        t.start()
+        # Manually reduce remaining
+        t._remaining = 100.0
+        t.reset()
+        self.assertFalse(t.running)
+        self.assertAlmostEqual(t.remaining, DEFAULT_SETTINGS["focus_minutes"] * 60, delta=1)
+
+    def test_set_session_changes_type_and_duration(self):
+        from oneless.ui.pomodoro_widget import DEFAULT_SETTINGS
+        t = self._make_timer()
+        t.set_session("short_break")
+        self.assertEqual(t.session_type, "short_break")
+        self.assertAlmostEqual(t.remaining, DEFAULT_SETTINGS["short_break_minutes"] * 60, delta=1)
+
+    def test_set_session_stops_running_timer(self):
+        t = self._make_timer()
+        t.start()
+        self.assertTrue(t.running)
+        t.set_session("long_break")
+        self.assertFalse(t.running)
+
+    def test_completion_fires_callback_once(self):
+        calls = []
+        import time
+        from oneless.ui.pomodoro_widget import PomodoroTimer
+        t = PomodoroTimer(
+            settings={"focus_minutes": 1, "short_break_minutes": 1,
+                      "long_break_minutes": 1, "long_break_interval": 4},
+            on_complete=lambda s: calls.append(s),
+        )
+        t.start()
+        t._remaining = 0.001          # almost done
+        t._last_tick = time.monotonic() - 1.0  # pretend 1s elapsed
+        t.tick()                      # should complete
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0], "focus")
+        # A second tick should NOT fire the callback again
+        t.tick()
+        self.assertEqual(len(calls), 1)
+
+    def test_focus_session_counter_increments(self):
+        import time
+        from oneless.ui.pomodoro_widget import PomodoroTimer
+        t = PomodoroTimer(
+            settings={"focus_minutes": 1, "short_break_minutes": 1,
+                      "long_break_minutes": 1, "long_break_interval": 4},
+            on_complete=lambda s: None,
+        )
+        t.start()
+        t._remaining = 0.001
+        t._last_tick = time.monotonic() - 1.0
+        t.tick()
+        self.assertEqual(t.completed_focus_sessions, 1)
+
+    def test_next_session_after_focus_is_short_break(self):
+        t = self._make_timer(long_break_interval=4)
+        # 0 completed focus sessions → next break after first session = short break
+        # (counter not yet incremented until completion fires)
+        self.assertEqual(t.next_session_type(), "short_break")
+
+    def test_next_session_after_interval_is_long_break(self):
+        from oneless.ui.pomodoro_widget import PomodoroTimer
+        t = PomodoroTimer(
+            settings={"focus_minutes": 1, "short_break_minutes": 1,
+                      "long_break_minutes": 1, "long_break_interval": 4},
+            on_complete=lambda s: None,
+        )
+        t._completed_focus = 4   # simulate 4 completed sessions
+        self.assertEqual(t.next_session_type(), "long_break")
+
+    def test_update_settings_does_not_reset_active_session(self):
+        t = self._make_timer()
+        t.start()
+        t._remaining = 500.0
+        t.update_settings({"focus_minutes": 10})
+        # Remaining must be unchanged — new duration only applies to next session
+        self.assertAlmostEqual(t._remaining, 500.0, delta=2)
+
+    def test_invalid_session_type_raises(self):
+        t = self._make_timer()
+        with self.assertRaises(ValueError):
+            t.set_session("espresso")
+
+
+# ---------------------------------------------------------------------------
+# Repository settings tests
+# ---------------------------------------------------------------------------
+
+class TestRepositorySettings(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.mktemp(suffix=".db")
+        from oneless.persistence.repository import TaskRepository
+        self.repo = TaskRepository(db_path=self._tmp)
+
+    def tearDown(self):
+        self.repo.close()
+        if os.path.exists(self._tmp):
+            os.remove(self._tmp)
+
+    def test_get_missing_setting_returns_default(self):
+        self.assertIsNone(self.repo.get_setting("nonexistent"))
+        self.assertEqual(self.repo.get_setting("nonexistent", "fallback"), "fallback")
+
+    def test_set_and_get_setting(self):
+        self.repo.set_setting("theme", "dark")
+        self.assertEqual(self.repo.get_setting("theme"), "dark")
+
+    def test_set_setting_upserts(self):
+        self.repo.set_setting("theme", "dark")
+        self.repo.set_setting("theme", "light")
+        self.assertEqual(self.repo.get_setting("theme"), "light")
+
+    def test_multiple_settings_are_independent(self):
+        self.repo.set_setting("focus_minutes", "30")
+        self.repo.set_setting("short_break_minutes", "10")
+        self.assertEqual(self.repo.get_setting("focus_minutes"), "30")
+        self.assertEqual(self.repo.get_setting("short_break_minutes"), "10")
+
+    def test_json_roundtrip_for_pomodoro_settings(self):
+        import json
+        settings = {"focus_minutes": 30, "short_break_minutes": 8,
+                    "long_break_minutes": 20, "long_break_interval": 3}
+        self.repo.set_setting("pomodoro_settings", json.dumps(settings))
+        restored = json.loads(self.repo.get_setting("pomodoro_settings"))
+        self.assertEqual(restored, settings)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
