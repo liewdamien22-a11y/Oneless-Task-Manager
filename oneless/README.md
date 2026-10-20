@@ -1,0 +1,117 @@
+# OneLess
+
+AI-assisted personal task manager built with Python and Kivy.
+
+👉 **New here? See the [Quick Start Guide](QUICKSTART.md) for step-by-step setup instructions.**
+
+---
+
+## Requirements
+
+- **Python 3.10 – 3.13** (Python 3.14 is not yet supported by Kivy's Windows binaries)
+- pip
+
+> **Note for Python 3.14 users:** Kivy's Windows SDL2 dependency (`kivy_deps.sdl2_dev`) does not yet ship a wheel for Python 3.14. Until Kivy releases updated packages, please use Python 3.13 on Windows. The backend layers (models, persistence, services) are fully tested and work on Python 3.14. Only the Kivy UI layers require 3.10–3.13.
+
+## Setup
+
+```bash
+# 1. Create and activate a virtual environment (recommended)
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. (Optional) Configure AI provider
+#    Copy .env.example to .env and edit as needed.
+#    The default mock provider works without any credentials.
+copy .env.example .env   # Windows
+# cp .env.example .env   # macOS / Linux
+```
+
+## Running the application
+
+```bash
+python main.py
+```
+
+The SQLite database is created automatically at `data/oneless.db` on first run.
+
+## Running the tests
+
+The core tests (models, persistence, services) do not require Kivy:
+
+```bash
+python tests/test_core.py
+```
+
+Expected output:
+```
+Ran 18 tests in ~1s
+OK
+```
+
+## Project structure
+
+```
+oneless/
+├── main.py                        # Entry point
+├── requirements.txt
+├── .env.example                   # Credential template (copy to .env)
+├── tests/
+│   └── test_core.py               # Unit + integration tests (no Kivy needed)
+└── oneless/
+    ├── models/
+    │   └── task.py                # Task and Subtask dataclasses
+    ├── persistence/
+    │   └── repository.py          # SQLite repository (all DB queries)
+    ├── services/
+    │   └── task_service.py        # Business logic, filtering, validation
+    ├── ai/                        # AI provider interface (Milestone 2)
+    └── ui/
+        ├── app.py                 # Kivy App subclass
+        ├── main_screen.py         # Three-column root layout
+        ├── calendar_widget.py     # Month-view calendar
+        ├── task_list_widget.py    # Task list + filter tabs
+        ├── task_detail_widget.py  # Centre panel — view/edit task
+        └── ai_sidebar_widget.py   # Right panel — chat sidebar (stub)
+```
+
+## Milestones
+
+| # | Description | Status |
+|---|---|---|
+| 1 | Functional task manager (calendar, list, detail, CRUD, SQLite) | ✅ Done |
+| 2 | AI chat sidebar, natural-language task operations | 🔲 Planned |
+| 3 | Calendar-aware assistance, scheduling suggestions | 🔲 Planned |
+| 4 | Polish, keyboard nav, optional voice input | 🔲 Planned |
+
+## AI provider
+
+Set `AI_PROVIDER` in `.env`:
+
+| Value | Description |
+|---|---|
+| `mock` | Deterministic responses, no credentials needed (default) |
+| `openai` | Requires `OPENAI_API_KEY` |
+| `watsonx` | Requires `WATSONX_API_KEY`, `WATSONX_PROJECT_ID`, `WATSONX_URL` |
+
+## Architecture
+
+The application is divided into clearly separated layers:
+
+- **Models** (`oneless/models/`) — pure Python dataclasses, no I/O.
+- **Persistence** (`oneless/persistence/`) — all SQLite access; no other layer issues SQL.
+- **Services** (`oneless/services/`) — validation, business logic, filtering. No UI/DB imports.
+- **AI** (`oneless/ai/`) — provider-agnostic interface; implemented in Milestone 2.
+- **UI** (`oneless/ui/`) — Kivy widgets; calls services only; no direct DB access.
+
+## Notes
+
+- No API keys or secrets should ever be committed to the repository.
+- The `data/` directory and `.env` file are both gitignored.
+- All timestamps are stored as ISO-8601 UTC strings.

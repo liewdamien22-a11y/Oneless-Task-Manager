@@ -1,0 +1,5 @@
+kivy>=2.3.0
+# Optional: uncomment for real AI provider (OpenAI-compatible)
+# openai>=1.0.0
+# Optional: uncomment for IBM watsonx
+# ibm-watsonx-ai>=1.0.0

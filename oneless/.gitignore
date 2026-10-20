@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Environment / secrets — never commit real keys
+.env
+*.local.env
+
+# Application data
+data/
+*.db
+*.sqlite3
+
+# Kivy cache
+.kivy/
+
+# IDEs
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Coverage
+.coverage
+htmlcov/
