@@ -8,7 +8,7 @@ Right:  AI chat sidebar (AISidebarWidget)
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle
@@ -16,6 +16,8 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 
+from oneless.ai import get_provider
+from oneless.ai.base import ChatMessage
 from oneless.services.task_service import TaskService, ValidationError
 from oneless.ui.ai_sidebar_widget import AISidebarWidget
 from oneless.ui.calendar_widget import CalendarWidget
@@ -52,8 +54,25 @@ class MainScreen(BoxLayout):
         self._active_filter = "all"
         self._selected_date: Optional[str] = date.today().isoformat()
 
+        # AI provider + conversation history
+        try:
+            self._ai_provider = get_provider()
+        except Exception as exc:
+            self._ai_provider = None
+            self._ai_init_error = str(exc)
+        else:
+            self._ai_init_error = None
+        self._chat_history: List[ChatMessage] = []
+
         self._build_columns()
         self._refresh_all()
+
+        # Show provider init error in sidebar if one occurred
+        if self._ai_init_error:
+            self._ai_sidebar.add_assistant_message(
+                f"⚠️ AI provider error: {self._ai_init_error}\n\n"
+                "Check your .env file and restart the app."
+            )
 
     # ------------------------------------------------------------------
     # Column assembly
@@ -96,7 +115,10 @@ class MainScreen(BoxLayout):
         )
 
         # ── Right column ───────────────────────────────────────────────
-        self._ai_sidebar = AISidebarWidget(size_hint_x=0.33)
+        self._ai_sidebar = AISidebarWidget(
+            on_send=self._on_ai_send,
+            size_hint_x=0.33,
+        )
 
         self.add_widget(left)
         self.add_widget(self._task_detail)
@@ -261,6 +283,130 @@ class MainScreen(BoxLayout):
             self._show_error(str(exc))
             return
         self._refresh_all()
+
+    # ------------------------------------------------------------------
+    # AI chat handler
+    # ------------------------------------------------------------------
+
+    def _build_task_context(self) -> str:
+        """Render all tasks as a plain-text summary for the AI system prompt."""
+        from datetime import date as _date
+        tasks = self._service.list_tasks()
+        today = _date.today().isoformat()
+        lines = [f"Today's date: {today}", f"Total tasks: {len(tasks)}", ""]
+        for t in tasks:
+            status = "✓ completed" if t.completed else "pending"
+            due = f"due {t.due_date}" if t.due_date else "no due date"
+            time_part = f" at {t.due_time}" if t.due_time else ""
+            duration = f", ~{t.estimated_duration}min" if t.estimated_duration else ""
+            subtask_summary = (
+                f", {len(t.subtasks)} subtask(s)" if t.subtasks else ""
+            )
+            lines.append(
+                f"[{t.id}] {t.title} | {status} | {t.priority} priority | "
+                f"{due}{time_part}{duration} | category: {t.category or 'none'}"
+                f"{subtask_summary}"
+            )
+        return "\n".join(lines)
+
+    def _on_ai_send(self, text: str) -> None:
+        """Called when the user hits Send in the AI sidebar."""
+        if self._ai_provider is None:
+            self._ai_sidebar.add_user_message(text)
+            self._ai_sidebar.add_assistant_message(
+                "⚠️ AI provider is not configured. Check your .env file."
+            )
+            return
+
+        self._ai_sidebar.add_user_message(text)
+        self._ai_sidebar.set_loading(True)
+
+        # Run the API call off the main thread so the UI stays responsive
+        import threading
+        threading.Thread(
+            target=self._ai_worker,
+            args=(text,),
+            daemon=True,
+        ).start()
+
+    def _ai_worker(self, user_message: str) -> None:
+        """Background thread: call the AI provider then schedule UI update."""
+        try:
+            task_context = self._build_task_context()
+            response = self._ai_provider.chat(
+                history=self._chat_history,
+                user_message=user_message,
+                task_context=task_context,
+            )
+        except Exception as exc:
+            Clock.schedule_once(
+                lambda dt, e=str(exc): self._ai_on_error(e), 0
+            )
+            return
+
+        Clock.schedule_once(
+            lambda dt, r=response, u=user_message: self._ai_on_response(u, r), 0
+        )
+
+    def _ai_on_response(self, user_message: str, response) -> None:
+        """Main thread: apply tool calls, update history, show reply."""
+        from oneless.ai.base import ChatMessage
+
+        # Execute any tool calls the model requested
+        tool_results = []
+        for tc in response.tool_calls:
+            result = self._execute_tool_call(tc)
+            tool_results.append(result)
+
+        # Update conversation history
+        self._chat_history.append(ChatMessage(role="user", content=user_message))
+        self._chat_history.append(ChatMessage(role="assistant", content=response.text))
+
+        # Show the assistant reply (fall back to tool result summary if no text)
+        display_text = response.text
+        if not display_text and tool_results:
+            display_text = "\n".join(tool_results)
+        if display_text:
+            self._ai_sidebar.add_assistant_message(display_text)
+
+        self._ai_sidebar.set_loading(False)
+
+        # Refresh the UI if any mutations happened
+        if response.tool_calls:
+            self._refresh_all()
+
+    def _ai_on_error(self, error: str) -> None:
+        self._ai_sidebar.add_assistant_message(
+            f"⚠️ Error talking to the AI: {error}"
+        )
+        self._ai_sidebar.set_loading(False)
+
+    def _execute_tool_call(self, tc) -> str:
+        """Execute a single tool call from the AI and return a result string."""
+        try:
+            if tc.name == "create_task":
+                task = self._service.create_task(**tc.args)
+                return f"Created task: '{task.title}'"
+
+            if tc.name == "update_task":
+                task_id = tc.args.pop("task_id")
+                task = self._service.update_task(task_id, **tc.args)
+                return f"Updated task: '{task.title}'"
+
+            if tc.name == "complete_task":
+                task = self._service.complete_task(tc.args["task_id"])
+                return f"Completed task: '{task.title}'"
+
+            if tc.name == "delete_task":
+                self._service.delete_task(tc.args["task_id"])
+                return "Task deleted."
+
+            return f"Unknown tool: {tc.name}"
+
+        except ValidationError as exc:
+            return f"Could not execute {tc.name}: {exc}"
+        except Exception as exc:
+            return f"Error in {tc.name}: {exc}"
 
     # ------------------------------------------------------------------
     # Error popup

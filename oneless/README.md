@@ -95,7 +95,7 @@ oneless/
 | # | Description | Status |
 |---|---|---|
 | 1 | Functional task manager (calendar, list, detail, CRUD, SQLite) | ✅ Done |
-| 2 | AI chat sidebar, natural-language task operations | 🔲 Planned |
+| 2 | AI chat sidebar, natural-language task operations via Gemini 2.5 Flash Lite | ✅ Done |
 | 3 | Calendar-aware assistance, scheduling suggestions | 🔲 Planned |
 | 4 | Polish, keyboard nav, optional voice input | 🔲 Planned |
 
@@ -106,8 +106,17 @@ Set `AI_PROVIDER` in `.env`:
 | Value | Description |
 |---|---|
 | `mock` | Deterministic responses, no credentials needed (default) |
-| `openai` | Requires `OPENAI_API_KEY` |
-| `watsonx` | Requires `WATSONX_API_KEY`, `WATSONX_PROJECT_ID`, `WATSONX_URL` |
+| `gemini` | Google Gemini 2.5 Flash Lite — requires `GEMINI_API_KEY` |
+
+Get a free Gemini API key at **https://aistudio.google.com/apikey**
+
+### What the AI can do (Milestone 2)
+
+- **Create tasks** — "Add a task to submit the report by Friday at 5pm"
+- **Update tasks** — "Change the priority of the groceries task to high"
+- **Complete tasks** — "Mark the dentist appointment as done"
+- **Delete tasks** — "Remove the old meeting task"
+- **Answer questions** — "What tasks do I have due this week?"
 
 ## Architecture
 

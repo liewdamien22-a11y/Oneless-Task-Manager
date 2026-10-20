@@ -1,5 +1,5 @@
 kivy>=2.3.0
-# Optional: uncomment for real AI provider (OpenAI-compatible)
-# openai>=1.0.0
-# Optional: uncomment for IBM watsonx
-# ibm-watsonx-ai>=1.0.0
+# Google Gemini AI provider (required for AI_PROVIDER=gemini)
+google-genai>=1.0.0
+# Optional: load .env automatically on startup
+python-dotenv>=1.0.0

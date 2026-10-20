@@ -83,9 +83,12 @@ class AISidebarWidget(BoxLayout):
 
         # Welcome message
         self._add_message(
-            "Hi! I'm your OneLess assistant.\n\n"
-            "AI features are coming in Milestone 2. For now you can use the "
-            "task panels on the left to manage your tasks.",
+            "Hi! I'm your OneLess AI assistant.\n\n"
+            "You can ask me to create, update, complete, or delete tasks using "
+            "plain English — for example:\n"
+            "• \"Add a task to buy groceries tomorrow\"\n"
+            "• \"Mark the dentist task as done\"\n"
+            "• \"Change the priority of my report task to high\"",
             is_user=False,
         )
 

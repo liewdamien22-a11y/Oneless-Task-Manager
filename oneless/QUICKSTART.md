@@ -121,23 +121,33 @@ Your tasks persist across restarts.
 
 ---
 
-## Step 7 — (Optional) Configure the AI provider
+## Step 7 — (Optional) Connect the AI assistant
 
 The app works out of the box with a built-in **mock AI** — no credentials needed.
-Only do this step if you want to connect a real AI model.
+To enable real AI (Google Gemini) so you can manage tasks via natural language:
 
-1. Copy the example config:
+1. Get a **free** Gemini API key at **https://aistudio.google.com/apikey**
+
+2. Copy the example config:
    ```powershell
    copy .env.example .env
    ```
-2. Open `.env` in any text editor and set your provider:
 
-   | Setting | What to put there |
-   |---|---|
-   | `AI_PROVIDER=mock` | Leave as-is to use the built-in mock (default) |
-   | `AI_PROVIDER=openai` | Change to this if you have an OpenAI API key |
-   | `OPENAI_API_KEY=` | Paste your OpenAI key here |
-   | `WATSONX_*` | Fill in only if using IBM watsonx |
+3. Open `.env` in any text editor and fill it in:
+   ```
+   AI_PROVIDER=gemini
+   GEMINI_API_KEY=<paste your key here>
+   ```
+
+4. Install the new dependencies (if you haven't since the AI update):
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+5. Restart the app — the sidebar will greet you and you can now type things like:
+   - *"Add a task to buy groceries tomorrow"*
+   - *"Mark the dentist task as done"*
+   - *"What do I have due this week?"*
 
    > ⚠️ Never share your `.env` file. It is gitignored and will never be
    > committed to version control.
